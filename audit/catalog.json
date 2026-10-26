@@ -1,0 +1,1299 @@
+{
+  "version": "0.1.0",
+  "areas": [
+    {
+      "id": "IAM",
+      "name": "Identity and access"
+    },
+    {
+      "id": "POL",
+      "name": "Enterprise and organization policies"
+    },
+    {
+      "id": "BRP",
+      "name": "Branch protection"
+    },
+    {
+      "id": "ACT",
+      "name": "GitHub Actions"
+    },
+    {
+      "id": "WFL",
+      "name": "Workflows"
+    },
+    {
+      "id": "SEC",
+      "name": "Code security"
+    },
+    {
+      "id": "INT",
+      "name": "Integrations"
+    },
+    {
+      "id": "DEP",
+      "name": "Deployments"
+    },
+    {
+      "id": "AUD",
+      "name": "Audit log"
+    },
+    {
+      "id": "HYG",
+      "name": "Hygiene"
+    }
+  ],
+  "sources": [
+    {
+      "name": "GitHub Docs",
+      "url": "https://docs.github.com/en/enterprise-cloud@latest"
+    },
+    {
+      "name": "GitHub Well-Architected Framework",
+      "url": "https://wellarchitected.github.com/"
+    },
+    {
+      "name": "OpenSSF Scorecard checks",
+      "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md"
+    },
+    {
+      "name": "OpenSSF Source Code Management Platform Configuration Best Practices",
+      "url": "https://best.openssf.org/SCM-BestPractices/"
+    },
+    {
+      "name": "Legitify",
+      "url": "https://github.com/Legit-Labs/legitify"
+    },
+    {
+      "name": "zizmor",
+      "url": "https://docs.zizmor.sh/"
+    }
+  ],
+  "rules": [
+    {
+      "id": "IAM-01",
+      "area": "IAM",
+      "scope": "enterprise",
+      "severity": "high",
+      "title": "Enterprise authenticates through an identity provider",
+      "rationale": "With Enterprise Managed Users, the identity provider controls who can sign in, MFA and Conditional Access. GitHub's own two-factor settings do not apply to managed users, so the IdP configuration is the main authentication control.",
+      "remediation": "Configure OIDC (Entra ID, with Conditional Access Policy support) or SAML for the enterprise, and enforce MFA and device or location conditions in the IdP.",
+      "manual_check": "Screenshot Enterprise settings > Authentication security, and verify MFA and Conditional Access policies for the GitHub application in the IdP.",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "About Enterprise Managed Users",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/admin/concepts/identity-and-access-management/enterprise-managed-users"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "IAM-02",
+      "area": "IAM",
+      "scope": "enterprise",
+      "severity": "medium",
+      "title": "Access is restricted by IP allow list or Conditional Access",
+      "rationale": "Without network restrictions, a stolen session or token can be used from anywhere. An IP allow list, or IdP Conditional Access with OIDC, limits where the enterprise can be reached from.",
+      "remediation": "Enable the enterprise IP allow list, including for installed GitHub Apps, or use OIDC with Conditional Access Policies to restrict access to managed devices and networks.",
+      "manual_check": "Screenshot Enterprise settings > Authentication security > IP allow list, or document the Conditional Access policy in the IdP.",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Restricting network traffic with an IP allow list",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/admin/configuring-settings/hardening-security-for-your-enterprise/restricting-network-traffic-to-your-enterprise-with-an-ip-allow-list"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "IAM-03",
+      "area": "IAM",
+      "scope": "enterprise",
+      "severity": "medium",
+      "title": "Number of enterprise owners is limited",
+      "params": {
+        "min_owners": 2,
+        "max_owners": 5
+      },
+      "rationale": "Enterprise owners control every policy and organization. Each owner account is a high-value target, while a single owner is a single point of failure.",
+      "remediation": "Keep two to five enterprise owners. Use billing manager and organization roles for everyone else, and review the owner list regularly.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Roles in an enterprise",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/admin/concepts/enterprise-fundamentals/roles-in-an-enterprise"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "IAM-04",
+      "area": "IAM",
+      "scope": "org",
+      "severity": "medium",
+      "title": "Number of organization owners is limited",
+      "params": {
+        "min_owners": 2,
+        "max_owners": 5
+      },
+      "rationale": "Organization owners can change every setting, read every repository and remove protections. Too many owners widen the attack surface; a single owner is a single point of failure.",
+      "remediation": "Keep two to five owners per organization. Grant narrower access through teams, repository roles, security managers or custom organization roles.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Roles in an organization",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/organizations/managing-peoples-access-to-your-organization-with-roles/roles-in-an-organization"
+        },
+        {
+          "source": "Legitify",
+          "title": "member.organization_has_too_many_admins",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "IAM-05",
+      "area": "IAM",
+      "scope": "repo",
+      "severity": "low",
+      "title": "Repository admin access is granted through teams",
+      "rationale": "Admin access given directly to individual users is hard to review and is often left behind when people change roles. Admins can disable branch protection and security features.",
+      "remediation": "Grant admin access through a team synchronized from the IdP, and remove direct admin collaborators.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Roles in an organization",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/organizations/managing-peoples-access-to-your-organization-with-roles/roles-in-an-organization"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "IAM-06",
+      "area": "IAM",
+      "scope": "org",
+      "severity": "low",
+      "title": "Outside collaborators are reviewed",
+      "rationale": "Outside collaborators (repository collaborators in an EMU enterprise) have access to repositories without organization membership, and are easily forgotten in access reviews.",
+      "remediation": "Review each outside collaborator, remove those no longer needed, and restrict who can invite collaborators.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Abilities and restrictions of managed user accounts",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/admin/managing-iam/understanding-iam-for-enterprises/abilities-and-restrictions-of-managed-user-accounts"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "POL-01",
+      "area": "POL",
+      "scope": "org",
+      "severity": "medium",
+      "title": "Base repository permission is read or none",
+      "rationale": "The base permission applies to every member in every repository. Write or admin as the base permission lets any member push to, or reconfigure, every repository.",
+      "remediation": "Set the base permission to 'No permission' or 'Read' at enterprise level, and grant write access through teams.",
+      "manual_check": "Screenshot Organization settings > Member privileges > Base permissions.",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Setting base permissions for an organization",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/organizations/managing-user-access-to-your-organizations-repositories/managing-repository-roles/setting-base-permissions-for-an-organization"
+        },
+        {
+          "source": "GitHub Docs",
+          "title": "Enforcing repository management policies in your enterprise",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-repository-management-policies-in-your-enterprise"
+        },
+        {
+          "source": "Legitify",
+          "title": "organization.default_repository_permission_is_not_none",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        },
+        {
+          "source": "Legitify",
+          "title": "enterprise.repository_no_permission_enforced_by_default",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "POL-02",
+      "area": "POL",
+      "scope": "enterprise",
+      "severity": "medium",
+      "title": "Members cannot change repository visibility",
+      "rationale": "If members can change visibility, a private repository can be made internal and readable by the whole enterprise by any repository admin, without review.",
+      "remediation": "Set the enterprise policy for repository visibility changes to organization owners only.",
+      "manual_check": "If no enterprise policy is set, screenshot Organization settings > Member privileges > Repository visibility change in each organization.",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Enforcing repository management policies in your enterprise",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-repository-management-policies-in-your-enterprise"
+        },
+        {
+          "source": "Legitify",
+          "title": "enterprise.enterprise_not_using_visibility_change_disable_policy",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "POL-03",
+      "area": "POL",
+      "scope": "enterprise",
+      "severity": "medium",
+      "title": "Members cannot delete or transfer repositories",
+      "rationale": "Repository deletion and transfer destroy or move code and history. Only organization owners should be able to do this.",
+      "remediation": "Set the enterprise policy for repository deletion and transfer to organization owners only.",
+      "manual_check": "If no enterprise policy is set, screenshot Organization settings > Member privileges > Repository deletion and transfer in each organization.",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Enforcing repository management policies in your enterprise",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-repository-management-policies-in-your-enterprise"
+        },
+        {
+          "source": "Legitify",
+          "title": "enterprise.memberes_allowed_repository_move_or_deletion",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "POL-04",
+      "area": "POL",
+      "scope": "org",
+      "severity": "low",
+      "title": "Forking of private and internal repositories is restricted",
+      "rationale": "Forks keep a copy of the code outside the original repository's access control and protections, and survive when access to the original is removed.",
+      "remediation": "Disable forking of private and internal repositories at enterprise level, or limit forks to the same organization.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Managing the forking policy for your organization",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/organizations/managing-organization-settings/managing-the-forking-policy-for-your-organization"
+        },
+        {
+          "source": "Legitify",
+          "title": "enterprise.enterprise_allows_forking_repos",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        },
+        {
+          "source": "Legitify",
+          "title": "repository.forking_allowed_for_repository",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "POL-05",
+      "area": "POL",
+      "scope": "enterprise",
+      "severity": "low",
+      "title": "Members cannot invite outside collaborators",
+      "rationale": "When any repository admin can add collaborators, access can be granted outside the normal approval and IdP processes.",
+      "remediation": "Restrict inviting repository collaborators to organization owners at enterprise level.",
+      "manual_check": "If no enterprise policy is set, screenshot Organization settings > Member privileges > Repository collaborators in each organization.",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Enforcing repository management policies in your enterprise",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-repository-management-policies-in-your-enterprise"
+        },
+        {
+          "source": "Legitify",
+          "title": "enterprise.enterprise_allows_inviting_externals_collaborators",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "BRP-01",
+      "area": "BRP",
+      "scope": "repo",
+      "severity": "high",
+      "title": "Default branch requires a reviewed pull request",
+      "params": {
+        "min_approvals": 1
+      },
+      "rationale": "Without a required review, one compromised account or one mistake can put code directly into the branch that is built and deployed.",
+      "remediation": "Use an organization ruleset that targets the default branch of all repositories and requires a pull request with at least one approval.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "About rulesets",
+          "url": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets"
+        },
+        {
+          "source": "OpenSSF Scorecard",
+          "title": "Branch-Protection",
+          "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#branch-protection"
+        },
+        {
+          "source": "OpenSSF Scorecard",
+          "title": "Code-Review",
+          "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#code-review"
+        },
+        {
+          "source": "Legitify",
+          "title": "repository.missing_default_branch_protection",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        },
+        {
+          "source": "Legitify",
+          "title": "repository.code_review_not_required",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "BRP-02",
+      "area": "BRP",
+      "scope": "repo",
+      "severity": "medium",
+      "title": "Force pushes to the default branch are blocked",
+      "rationale": "A force push rewrites history. It can remove reviewed commits or hide malicious changes.",
+      "remediation": "Add the 'Block force pushes' rule to the default-branch ruleset.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "About rulesets",
+          "url": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets"
+        },
+        {
+          "source": "OpenSSF Scorecard",
+          "title": "Branch-Protection",
+          "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#branch-protection"
+        },
+        {
+          "source": "Legitify",
+          "title": "repository.missing_default_branch_protection_force_push",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "BRP-03",
+      "area": "BRP",
+      "scope": "repo",
+      "severity": "medium",
+      "title": "Default branch cannot be deleted",
+      "rationale": "Deleting the default branch removes the protected history and breaks builds and deployments.",
+      "remediation": "Add the 'Restrict deletions' rule to the default-branch ruleset.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "About rulesets",
+          "url": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets"
+        },
+        {
+          "source": "OpenSSF Scorecard",
+          "title": "Branch-Protection",
+          "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#branch-protection"
+        },
+        {
+          "source": "Legitify",
+          "title": "repository.missing_default_branch_protection_deletion",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "BRP-04",
+      "area": "BRP",
+      "scope": "repo",
+      "severity": "medium",
+      "title": "New commits invalidate earlier approvals",
+      "rationale": "If approvals survive new pushes, an author can get approval for a harmless change and then push different code before merging.",
+      "remediation": "Enable 'Dismiss stale pull request approvals when new commits are pushed' or 'Require approval of the most recent reviewable push'.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "About rulesets",
+          "url": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets"
+        },
+        {
+          "source": "OpenSSF Scorecard",
+          "title": "Branch-Protection",
+          "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#branch-protection"
+        },
+        {
+          "source": "Legitify",
+          "title": "repository.dismisses_stale_reviews",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "BRP-05",
+      "area": "BRP",
+      "scope": "repo",
+      "severity": "low",
+      "title": "Code owner review is required",
+      "rationale": "Code owner review ensures that changes to sensitive paths, such as workflows and infrastructure code, are approved by the people responsible for them.",
+      "remediation": "Add a CODEOWNERS file that covers at least .github/ and infrastructure code, and require code owner review in the default-branch ruleset.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "About code owners",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners"
+        },
+        {
+          "source": "OpenSSF Scorecard",
+          "title": "Branch-Protection",
+          "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#branch-protection"
+        },
+        {
+          "source": "Legitify",
+          "title": "repository.code_review_not_limited_to_code_owners",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "BRP-06",
+      "area": "BRP",
+      "scope": "repo",
+      "severity": "low",
+      "title": "Status checks are required before merging",
+      "rationale": "Required status checks make tests and security scans gate the merge, instead of only reporting after the fact.",
+      "remediation": "Require the build, test and code scanning checks in the default-branch ruleset.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "About rulesets",
+          "url": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets"
+        },
+        {
+          "source": "OpenSSF Scorecard",
+          "title": "Branch-Protection",
+          "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#branch-protection"
+        },
+        {
+          "source": "Legitify",
+          "title": "repository.requires_status_checks",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "BRP-07",
+      "area": "BRP",
+      "scope": "org",
+      "severity": "low",
+      "title": "Rule bypass is limited",
+      "rationale": "Actors who can always bypass rulesets, and administrators exempt from classic branch protection, can push unreviewed code. Bypass should be rare, limited to a few roles, and preferably only through a pull request.",
+      "remediation": "Limit bypass actors to a small team or role, set bypass mode to 'For pull requests only' where possible, and enable 'Do not allow bypassing the above settings' for classic branch protection.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "About rulesets",
+          "url": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets"
+        },
+        {
+          "source": "GitHub Docs",
+          "title": "About protected branches",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches"
+        },
+        {
+          "source": "Legitify",
+          "title": "users_allowed_to_bypass_ruleset",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "BRP-08",
+      "area": "BRP",
+      "scope": "org",
+      "severity": "medium",
+      "title": "Rule bypasses in the last 30 days are explained",
+      "rationale": "Each bypass is a push that skipped review or other required rules. Frequent bypasses show that the rules do not fit the workflow, or that they are being circumvented.",
+      "remediation": "Review each bypass with the actor. Adjust rules or bypass lists so that bypass stays exceptional.",
+      "manual_check": "Organization settings > Rules > Insights, filtered on bypassed.",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "About rulesets",
+          "url": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "BRP-09",
+      "area": "BRP",
+      "scope": "repo",
+      "severity": "low",
+      "title": "CODEOWNERS files are valid",
+      "rationale": "Invalid lines in CODEOWNERS are ignored, so the intended owners are silently not requested for review.",
+      "remediation": "Fix the reported lines: unknown users or teams, teams without access to the repository, and syntax errors.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "About code owners",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "ACT-01",
+      "area": "ACT",
+      "scope": "org",
+      "severity": "medium",
+      "title": "Only approved actions can run",
+      "rationale": "Every action runs with the workflow's token and secrets. Allowing all actions lets any repository pull in arbitrary third-party code.",
+      "remediation": "Allow only actions created by GitHub, verified creators and an approved list, set at enterprise level.",
+      "manual_check": "Screenshot Enterprise settings > Policies > Actions.",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Enforcing policies for GitHub Actions in your enterprise",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-policies-for-github-actions-in-your-enterprise"
+        },
+        {
+          "source": "GitHub Docs",
+          "title": "Disabling or limiting GitHub Actions for your organization",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/organizations/managing-organization-settings/disabling-or-limiting-github-actions-for-your-organization"
+        },
+        {
+          "source": "Legitify",
+          "title": "actions.all_github_actions_are_allowed",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "ACT-02",
+      "area": "ACT",
+      "scope": "org",
+      "severity": "low",
+      "title": "Actions must be pinned to a full commit SHA",
+      "rationale": "Tags and branches can be moved by the action's owner or an attacker who compromises it, so a tag reference can start running different code without any change in the workflow.",
+      "remediation": "Enable the policy that requires actions to be pinned to a full-length commit SHA, and use Dependabot to keep the pins up to date.",
+      "manual_check": "Screenshot Enterprise settings > Policies > Actions, or each organization's Actions settings.",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Secure use reference",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/actions/reference/security/secure-use"
+        },
+        {
+          "source": "OpenSSF Scorecard",
+          "title": "Pinned-Dependencies",
+          "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#pinned-dependencies"
+        },
+        {
+          "source": "GitHub Changelog",
+          "title": "Actions policy supports blocking and SHA pinning",
+          "url": "https://github.blog/changelog/2025-08-15-github-actions-policy-now-supports-blocking-and-sha-pinning-actions/"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "ACT-03",
+      "area": "ACT",
+      "scope": "org",
+      "severity": "medium",
+      "title": "GITHUB_TOKEN is read-only by default",
+      "rationale": "With write as the default, every workflow, and every action it uses, can push code, create releases and change issues unless it explicitly asks for less.",
+      "remediation": "Set the default workflow permissions to read at enterprise or organization level, and grant write per job with a permissions block.",
+      "manual_check": "Screenshot Enterprise settings > Policies > Actions > Workflow permissions.",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Use GITHUB_TOKEN for authentication in workflows",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/actions/tutorials/authenticate-with-github_token"
+        },
+        {
+          "source": "OpenSSF Scorecard",
+          "title": "Token-Permissions",
+          "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#token-permissions"
+        },
+        {
+          "source": "Legitify",
+          "title": "actions.token_default_permissions_is_read_write",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        },
+        {
+          "source": "Legitify",
+          "title": "repository.token_default_permissions_is_read_write",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "ACT-04",
+      "area": "ACT",
+      "scope": "org",
+      "severity": "medium",
+      "title": "GitHub Actions cannot approve pull requests",
+      "rationale": "If workflows can approve pull requests, a workflow, or anyone who can change one, can satisfy required reviews without a human.",
+      "remediation": "Disable 'Allow GitHub Actions to create and approve pull requests'.",
+      "manual_check": "Screenshot Enterprise settings > Policies > Actions > Workflow permissions.",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Disabling or limiting GitHub Actions for your organization",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/organizations/managing-organization-settings/disabling-or-limiting-github-actions-for-your-organization"
+        },
+        {
+          "source": "Legitify",
+          "title": "actions.actions_can_approve_pull_requests",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        },
+        {
+          "source": "Legitify",
+          "title": "repository.actions_can_approve_pull_requests",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "ACT-05",
+      "area": "ACT",
+      "scope": "org",
+      "severity": "low",
+      "title": "Workflows from fork pull requests need approval",
+      "rationale": "Workflows triggered from forks run code from the pull request author. Requiring approval for all external contributors prevents unreviewed code from running on your runners.",
+      "remediation": "Require approval for all external contributors.",
+      "manual_check": "Screenshot the Actions settings for fork pull request workflows.",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Approving workflow runs from forks",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/actions/how-tos/manage-workflow-runs/approve-runs-from-forks"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "ACT-06",
+      "area": "ACT",
+      "scope": "org",
+      "severity": "high",
+      "title": "Self-hosted runners are restricted",
+      "rationale": "Self-hosted runners are not reset between jobs and often sit inside the corporate network. Any repository that can use a runner can run code on it and reach what it can reach.",
+      "remediation": "Never allow public repositories to use self-hosted runners. Put runners in groups limited to selected repositories and workflows, and prefer ephemeral runners.",
+      "manual_check": "Screenshot runner groups in Enterprise and Organization settings > Actions > Runner groups.",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Managing access to self-hosted runners using groups",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/actions/how-tos/manage-runners/self-hosted-runners/manage-access"
+        },
+        {
+          "source": "GitHub Docs",
+          "title": "Secure use reference",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/actions/reference/security/secure-use"
+        },
+        {
+          "source": "Legitify",
+          "title": "runner_group.runner_group_can_be_used_by_public_repositories",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        },
+        {
+          "source": "Legitify",
+          "title": "runner_group.runner_group_not_limited_to_selected_repositories",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "ACT-07",
+      "area": "ACT",
+      "scope": "org",
+      "severity": "low",
+      "title": "Organization secrets are shared with selected repositories only",
+      "rationale": "A secret available to all repositories can be read by any workflow in any repository, including new ones and ones with weak protection.",
+      "remediation": "Change organization secrets to 'Selected repositories', or move them to environment secrets with required reviewers.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Using secrets in GitHub Actions",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "WFL-01",
+      "area": "WFL",
+      "scope": "repo",
+      "severity": "high",
+      "title": "pull_request_target is not used with untrusted code",
+      "rationale": "pull_request_target runs with secrets and a write token in the context of the base repository. Checking out or running the pull request's code in such a workflow lets anyone who opens a pull request run code with those privileges.",
+      "remediation": "Use pull_request instead. If pull_request_target is needed, never check out or execute the pull request head, and keep permissions minimal.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Secure use reference",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/actions/reference/security/secure-use"
+        },
+        {
+          "source": "OpenSSF Scorecard",
+          "title": "Dangerous-Workflow",
+          "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#dangerous-workflow"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "WFL-02",
+      "area": "WFL",
+      "scope": "repo",
+      "severity": "medium",
+      "title": "Third-party actions are pinned to a commit SHA",
+      "params": {
+        "trusted_owners": [
+          "actions",
+          "github"
+        ]
+      },
+      "rationale": "A tag or branch reference runs whatever the action owner publishes under that name next. Pinning to a full commit SHA makes the code that runs immutable.",
+      "remediation": "Pin third-party actions to a full commit SHA with the version in a comment, and let Dependabot update the pins.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Secure use reference",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/actions/reference/security/secure-use"
+        },
+        {
+          "source": "OpenSSF Scorecard",
+          "title": "Pinned-Dependencies",
+          "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#pinned-dependencies"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "WFL-03",
+      "area": "WFL",
+      "scope": "repo",
+      "severity": "low",
+      "title": "Workflows declare token permissions",
+      "rationale": "Without a permissions block, a workflow gets the default GITHUB_TOKEN permissions, which may include write access. Declaring permissions keeps each workflow at least privilege, whatever the default is.",
+      "remediation": "Add a top-level 'permissions: contents: read' (or 'permissions: {}') and grant extra permissions per job.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Use GITHUB_TOKEN for authentication in workflows",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/actions/tutorials/authenticate-with-github_token"
+        },
+        {
+          "source": "OpenSSF Scorecard",
+          "title": "Token-Permissions",
+          "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#token-permissions"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "WFL-04",
+      "area": "WFL",
+      "scope": "repo",
+      "severity": "medium",
+      "title": "zizmor finds no workflow vulnerabilities",
+      "rationale": "zizmor detects template injection, credential persistence, excessive permissions, dangerous triggers and other workflow weaknesses that simple configuration checks cannot see.",
+      "remediation": "Fix the findings as described in each zizmor audit's documentation, starting with high severity.",
+      "manual_check": "Run zizmor --offline --format json workflows/ on the collected workflows and pass the result with --zizmor.",
+      "references": [
+        {
+          "source": "zizmor",
+          "title": "zizmor documentation",
+          "url": "https://docs.zizmor.sh/"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "SEC-01",
+      "area": "SEC",
+      "scope": "repo",
+      "severity": "high",
+      "title": "Secret scanning is enabled",
+      "rationale": "Secret scanning finds credentials committed to repositories, including history, so they can be revoked before they are abused.",
+      "remediation": "Enable secret scanning in a security configuration applied to all repositories.",
+      "manual_check": "Screenshot Organization > Security > Coverage.",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Secret scanning",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/code-security/concepts/secret-security/secret-scanning"
+        },
+        {
+          "source": "Legitify",
+          "title": "repository.secret_scanning_not_enabled",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "SEC-02",
+      "area": "SEC",
+      "scope": "repo",
+      "severity": "high",
+      "title": "Push protection is enabled",
+      "rationale": "Push protection blocks pushes that contain recognized secrets, so they never reach the repository.",
+      "remediation": "Enable push protection in the security configuration, and use delegated bypass so bypasses need approval.",
+      "manual_check": "Screenshot Organization > Security > Coverage.",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "About push protection",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/code-security/concepts/secret-security/push-protection"
+        },
+        {
+          "source": "Legitify",
+          "title": "enterprise.enable_push_protection_secret_scanning",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "SEC-03",
+      "area": "SEC",
+      "scope": "repo",
+      "severity": "medium",
+      "title": "Dependabot alerts are enabled",
+      "rationale": "Dependabot alerts report known vulnerabilities in dependencies. Without them, vulnerable libraries go unnoticed.",
+      "remediation": "Enable the dependency graph and Dependabot alerts in the security configuration for all repositories.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "About Dependabot alerts",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/code-security/concepts/supply-chain-security/dependabot-alerts"
+        },
+        {
+          "source": "OpenSSF Scorecard",
+          "title": "Vulnerabilities",
+          "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#vulnerabilities"
+        },
+        {
+          "source": "Legitify",
+          "title": "repository.vulnerability_alerts_not_enabled",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "SEC-04",
+      "area": "SEC",
+      "scope": "repo",
+      "severity": "low",
+      "title": "Dependabot security updates are enabled",
+      "rationale": "Security updates open pull requests that fix vulnerable dependencies, which shortens the time from alert to fix.",
+      "remediation": "Enable Dependabot security updates in the security configuration.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "About Dependabot security updates",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/code-security/concepts/supply-chain-security/dependabot-security-updates"
+        },
+        {
+          "source": "OpenSSF Scorecard",
+          "title": "Dependency-Update-Tool",
+          "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#dependency-update-tool"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "SEC-05",
+      "area": "SEC",
+      "scope": "repo",
+      "severity": "medium",
+      "title": "Code scanning is enabled",
+      "rationale": "Code scanning finds vulnerabilities such as injection and unsafe deserialization in the organization's own code before it is merged.",
+      "remediation": "Enable CodeQL default setup through the security configuration, or add an advanced CodeQL workflow for languages that need it.",
+      "manual_check": "Repositories may have default setup enabled outside a security configuration. Check Organization > Security > Coverage.",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "About code scanning",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/code-security/concepts/code-scanning/code-scanning"
+        },
+        {
+          "source": "OpenSSF Scorecard",
+          "title": "SAST",
+          "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#sast"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "SEC-06",
+      "area": "SEC",
+      "scope": "org",
+      "severity": "medium",
+      "title": "New repositories get a security configuration by default",
+      "rationale": "Without a default configuration, every new repository starts with secret scanning, push protection and Dependabot off until someone remembers to turn them on.",
+      "remediation": "Set a security configuration as default for new private and internal repositories (for EMU, 'all' or 'private and internal'), and enforce it.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Enabling security features at scale",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/code-security/concepts/security-at-scale/organization-security"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "SEC-07",
+      "area": "SEC",
+      "scope": "org",
+      "severity": "high",
+      "title": "No open secret scanning alerts",
+      "rationale": "An open secret scanning alert is a credential that is, or was, readable by everyone with access to the repository. It must be assumed compromised until it is revoked.",
+      "remediation": "Revoke and rotate each secret, then close the alert as revoked. Removing it from the code alone is not enough.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Secret scanning",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/code-security/concepts/secret-security/secret-scanning"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "SEC-08",
+      "area": "SEC",
+      "scope": "org",
+      "severity": "medium",
+      "title": "No open critical or high Dependabot alerts",
+      "rationale": "Critical and high vulnerabilities in dependencies are often exploitable with public exploits.",
+      "remediation": "Update or replace the affected dependencies, starting with critical alerts in deployed applications. Set a remediation deadline per severity.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "About Dependabot alerts",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/code-security/concepts/supply-chain-security/dependabot-alerts"
+        },
+        {
+          "source": "OpenSSF Scorecard",
+          "title": "Vulnerabilities",
+          "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#vulnerabilities"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "SEC-09",
+      "area": "SEC",
+      "scope": "org",
+      "severity": "medium",
+      "title": "No open critical or high code scanning alerts",
+      "rationale": "Critical and high code scanning alerts are likely vulnerabilities in the organization's own code.",
+      "remediation": "Triage and fix critical and high alerts. Dismiss false positives with a reason so the backlog stays meaningful.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "About code scanning",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/code-security/concepts/code-scanning/code-scanning"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "INT-01",
+      "area": "INT",
+      "scope": "org",
+      "severity": "medium",
+      "title": "Webhooks use a secret and verified TLS",
+      "rationale": "Without a secret, the receiver cannot verify that a delivery came from GitHub. Without TLS verification, deliveries, which can contain code and metadata, can be intercepted.",
+      "remediation": "Set a random secret on every webhook and verify the signature in the receiver. Use HTTPS with certificate verification enabled.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Best practices for using webhooks",
+          "url": "https://docs.github.com/en/webhooks/using-webhooks/best-practices-for-using-webhooks"
+        },
+        {
+          "source": "GitHub Docs",
+          "title": "Validating webhook deliveries",
+          "url": "https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries"
+        },
+        {
+          "source": "OpenSSF Scorecard",
+          "title": "Webhooks",
+          "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#webhooks"
+        },
+        {
+          "source": "Legitify",
+          "title": "organization.organization_webhook_no_secret",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        },
+        {
+          "source": "Legitify",
+          "title": "organization.organization_webhook_doesnt_require_ssl",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        },
+        {
+          "source": "Legitify",
+          "title": "repository.repository_webhook_no_secret",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        },
+        {
+          "source": "Legitify",
+          "title": "repository.repository_webhook_doesnt_require_ssl",
+          "url": "https://github.com/Legit-Labs/legitify/tree/main/policies/github"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "INT-02",
+      "area": "INT",
+      "scope": "repo",
+      "severity": "medium",
+      "title": "Deploy keys are read-only",
+      "rationale": "A deploy key with write access can push to the repository. It is not tied to a person and does not pass through SSO, so a leaked key is hard to trace.",
+      "remediation": "Make deploy keys read-only. Use a GitHub App with scoped permissions where write access is needed.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Managing deploy keys",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/authentication/connecting-to-github-with-ssh/managing-deploy-keys"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "INT-03",
+      "area": "INT",
+      "scope": "org",
+      "severity": "low",
+      "title": "GitHub Apps with write access are limited to selected repositories",
+      "rationale": "An app installed on all repositories with write permissions can change any repository, including new ones. A compromise of the app or its private key affects the whole organization.",
+      "remediation": "Install apps on selected repositories only, and review whether each write permission is needed.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Reviewing and modifying installed GitHub Apps",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/apps/using-github-apps/reviewing-and-modifying-installed-github-apps"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "DEP-01",
+      "area": "DEP",
+      "scope": "repo",
+      "severity": "medium",
+      "title": "Production environments are protected",
+      "params": {
+        "production_pattern": "(^|[^a-z])(prod|production|prd|live)([^a-z]|$)"
+      },
+      "rationale": "Environment secrets and deployment rights are only as protected as the environment. Without reviewers or branch rules, any branch, including one from an unreviewed change, can deploy to production.",
+      "remediation": "Require reviewers for production environments and limit deployments to protected branches or tags.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Managing environments for deployment",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "AUD-01",
+      "area": "AUD",
+      "scope": "enterprise",
+      "severity": "medium",
+      "title": "Audit log is streamed to a SIEM",
+      "rationale": "The audit log API keeps a limited history and is not monitored. Streaming sends events to the SIEM for retention, alerting and correlation with other logs.",
+      "remediation": "Configure audit log streaming to the SIEM, include Git events where relevant, and alert on the event types in this report.",
+      "manual_check": "Screenshot Enterprise settings > Audit log > Log streaming, and compare audit-log-web.ndjson with the SIEM for the same period.",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Streaming the audit log for your enterprise",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "AUD-02",
+      "area": "AUD",
+      "scope": "enterprise",
+      "severity": "high",
+      "title": "Push protection bypasses are reviewed",
+      "params": {
+        "max_listed": 15
+      },
+      "rationale": "A bypass means a user pushed a detected secret deliberately. Each bypass needs a reason, and the secret usually needs rotation.",
+      "remediation": "Follow up on each bypass with the user. Enable delegated bypass so bypasses require approval.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "About push protection",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/code-security/concepts/secret-security/push-protection"
+        },
+        {
+          "source": "GitHub Docs",
+          "title": "Audit log events for your enterprise",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/audit-log-events-for-your-enterprise"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "AUD-03",
+      "area": "AUD",
+      "scope": "enterprise",
+      "severity": "medium",
+      "title": "Removal or override of branch protection is reviewed",
+      "params": {
+        "max_listed": 15
+      },
+      "rationale": "Deleting rulesets or branch protection, or overriding them, removes the review gate. Attackers and insiders do this before pushing changes.",
+      "remediation": "Confirm each event with the actor and alert on these events in the SIEM.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Audit log events for your enterprise",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/audit-log-events-for-your-enterprise"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "AUD-04",
+      "area": "AUD",
+      "scope": "enterprise",
+      "severity": "medium",
+      "title": "Security features are not turned off",
+      "params": {
+        "max_listed": 15
+      },
+      "rationale": "Turning off secret scanning, push protection, Dependabot or code scanning removes detection, sometimes to get a change through.",
+      "remediation": "Confirm each event, re-enable the feature, and enforce the security configuration so repositories cannot turn it off.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Audit log events for your enterprise",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/audit-log-events-for-your-enterprise"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "AUD-05",
+      "area": "AUD",
+      "scope": "enterprise",
+      "severity": "low",
+      "title": "Repository visibility changes, deletions and transfers are reviewed",
+      "params": {
+        "max_listed": 15
+      },
+      "rationale": "Visibility changes widen access to code; deletions and transfers remove it from the organization. These are rare and should be expected.",
+      "remediation": "Confirm each event with the actor, and restrict these actions to organization owners (POL-02, POL-03).",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Audit log events for your enterprise",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/audit-log-events-for-your-enterprise"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "AUD-06",
+      "area": "AUD",
+      "scope": "enterprise",
+      "severity": "info",
+      "title": "Self-hosted runner registrations",
+      "params": {
+        "max_listed": 15
+      },
+      "rationale": "New self-hosted runners extend where workflow code runs. Registrations should match known infrastructure.",
+      "remediation": "Confirm that each runner belongs to managed infrastructure.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Audit log events for your enterprise",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/audit-log-events-for-your-enterprise"
+        }
+      ],
+      "cis": null
+    },
+    {
+      "id": "HYG-01",
+      "area": "HYG",
+      "scope": "enterprise",
+      "severity": "low",
+      "title": "Copilot seats are in use",
+      "params": {
+        "inactive_days": 60
+      },
+      "rationale": "Unused seats cost money and keep access to Copilot features for people who may no longer need them.",
+      "remediation": "Remove seats unused for 60 days, or assign Copilot through IdP-synced teams so access follows role changes.",
+      "manual_check": "",
+      "references": [
+        {
+          "source": "GitHub Docs",
+          "title": "Reviewing user activity data for Copilot",
+          "url": "https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/administer-copilot/manage-for-organization/review-activity/review-user-activity-data"
+        }
+      ],
+      "cis": null
+    }
+  ]
+}

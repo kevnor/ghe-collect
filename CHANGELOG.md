@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `ghe-audit.py`: offline security assessment of the collected output against 51 rules in `audit/catalog.json`, referencing GitHub Docs, OpenSSF Scorecard and Legitify. It writes HTML, Markdown, Word, JSON and CSV reports, and supports zizmor import, waivers for accepted risks and Word templates
+
 - Detects organizations that block classic PATs, explains the fix and lists them under `ACTION NEEDED` in `summary.txt` (gh's `admin:org` hint is misleading here)
 - Accepts OAuth tokens from `gh auth login` (`gho_...`) as an alternative when organizations block classic PATs: no format warning, `gist` scope allowed, revoke reminder at the end, `token_type` in `meta/run.json`
 - Skips calls that need `admin:enterprise` when the token lacks it, and records them as `SKIP` instead of reporting them as failures

@@ -90,6 +90,12 @@ check "manifest records token type"        bash -c "jq -e '.token_type==\"oauth\
 check "OAuth token never written to output" bash -c "! grep -rq gho_testtoken '$WORK/out7'"
 check "gist still warned for classic PAT"  bash -c "FAKE_GH_SCOPES='repo, gist' GH_TOKEN=ghp_testtoken '$TEST_BASH' '$SCRIPT' --host test.ghe.com --enterprise test --orgs test-org --repo-limit 1 --no-audit-log --no-archive --out '$WORK/out8' 2>&1 | grep -q \"Unnecessary scope 'gist'\""
 
+echo "Audit"
+python3 "$ROOT/ghe-audit.py" "$O" --strict --out "$WORK/report" >"$WORK/audit.log" 2>&1
+check "audit runs on collector output"     bash -c "test -s '$WORK/report/report.html' && test -s '$WORK/report/report.docx'"
+check "audit checks all run"               bash -c "! grep -q 'failed to run' '$WORK/audit.log'"
+check "audit unit tests"                   python3 -m unittest discover -s "$ROOT/tests" -p 'test_audit.py'
+
 echo "Validation"
 "$TEST_BASH" "$SCRIPT" --host github.com --enterprise test >"$WORK/v.log" 2>&1
 check "rejects non-ghe.com host"           grep -q 'must look like SUBDOMAIN.ghe.com' "$WORK/v.log"

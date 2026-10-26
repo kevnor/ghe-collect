@@ -4,6 +4,8 @@ Read-only configuration collection from **GitHub Enterprise Cloud with data resi
 
 One run exports enterprise, organization and repository settings, the audit log and workflow files into a folder you can analyse offline. Nothing in the target enterprise is changed.
 
+`ghe-audit.py` then evaluates that folder against a catalog of recommended settings and writes a report (HTML, Markdown, Word, JSON, CSV). See [Analysing the output](#analysing-the-output).
+
 ## Safety properties
 
 - **Read-only.** Every REST call is `GET`. GraphQL is query-only, and the script refuses to send anything containing `mutation`.
@@ -133,11 +135,63 @@ Read `summary.txt` first. `owner-view: no` for an organization means the token u
 - [ ] Revoke the PAT, or for an OAuth token: `gh auth logout` and revoke GitHub CLI under Settings → Applications
 - [ ] Move the `.tar.gz` and `.sha256` to the engagement storage, and delete the copy on the device
 - [ ] Record the run in the activity log (from `meta/run.json`)
-- [ ] Run zizmor offline on the workflows: `zizmor --offline workflows/`
+- [ ] Run zizmor offline on the workflows: `zizmor --offline --format json workflows/ > zizmor.json`
+- [ ] Run `ghe-audit.py` (below) and review the findings with the customer
 - [ ] Compare `audit-log-web.ndjson` with the customer's SIEM for the same period to test whether audit log streaming is complete
 - [ ] Review `errors.log` and decide what to collect manually (screenshots)
 
 **Never commit collected output to this repository.** `.gitignore` excludes the default output names, but check before you push.
+
+## Analysing the output
+
+`ghe-audit.py` runs on your own machine against the extracted output. It never contacts GitHub, needs only Python 3.8+ (standard library), and the HTML report loads no external resources.
+
+```bash
+tar xzf ghe-collect-SLUG-TIMESTAMP.tar.gz
+zizmor --offline --format json ghe-collect-SLUG-TIMESTAMP/workflows/ > zizmor.json   # optional
+python3 ghe-audit.py ghe-collect-SLUG-TIMESTAMP --zizmor zizmor.json
+```
+
+The report is written to `ghe-collect-SLUG-TIMESTAMP-report/`: `report.html`, `report.md`, `report.docx`, `findings.json` and `findings.csv` (one row per rule and target). Options:
+
+| Option | Purpose |
+| --- | --- |
+| `--out DIR` | Report directory |
+| `--format html,md,docx,json,csv` | Only some formats |
+| `--zizmor FILE` | Include zizmor findings (rule WFL-04) |
+| `--docx-template FILE` | Use the styles, header and footer of a Word template (.docx or .dotx) |
+| `--waivers FILE` | Mark accepted risks |
+| `--strict` | Exit with status 2 if a check fails to run |
+
+Each rule gives one result per target (enterprise, organization, repository, webhook, ...):
+
+- **Fail**: the setting is weaker than recommended.
+- **Review**: not wrong in itself, but needs a decision or an explanation from the customer (e.g. bypass actors, audit log events).
+- **Accepted**: a fail or review covered by a waiver.
+- **Pass**, **Info**.
+- **Not assessed**: the data was not available, with the reason (missing scope, 403, organization not collected) and the manual check to do instead. Not assessed is never counted as a pass.
+
+Waivers file:
+
+```json
+{"waivers": [
+  {"rule": "IAM-03", "target": "*", "reason": "Two break-glass accounts", "approved_by": "CISO", "expires": "2027-06-30"}
+]}
+```
+
+`target` is a glob on the result target, such as `my-org/*`. Expired waivers are ignored with a warning.
+
+### Rule catalog
+
+The rules are in `audit/catalog.json`: title, severity, rationale, recommendation, manual check, tunable parameters (such as the maximum number of owners) and references. Edit wording there; the check logic for each rule ID is in `ghe-audit.py`. The rule text is our own. Each rule cites:
+
+- GitHub Docs, the primary source
+- OpenSSF Scorecard checks
+- the matching Legitify policy names
+
+The `cis` field is reserved for CIS GitHub Benchmark control IDs. They will be added once CIS licensing for commercial use has been confirmed.
+
+The rules are written for Enterprise Managed Users. MFA is enforced by the identity provider, so it is checked through IAM-01 and must be verified in the IdP.
 
 ## Moving the tool to another device
 
@@ -171,6 +225,8 @@ bash tests/run-tests.sh                                  # run with the default 
 TEST_BASH=/bin/bash bash tests/run-tests.sh              # on macOS: test with bash 3.2
 shellcheck -e SC2016 ghe-collect.sh scripts/*.sh tests/*.sh
 ```
+
+`tests/run-tests.sh` also runs `ghe-audit.py` on the fake collector output and the unit tests in `tests/test_audit.py`. Those tests build a "good" output where every rule must pass, and a "bad" output where every rule must fail or need review. When you add a rule, add its data to both.
 
 The tests use `tests/fake-gh`, a stand-in for the `gh` CLI that logs every call and returns canned responses. When you add an endpoint, add a matching response there if the new code path needs one, and a check in `tests/run-tests.sh` for any new guarantee.
 

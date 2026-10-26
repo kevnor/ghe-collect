@@ -4,7 +4,12 @@ ghe-collect-*.tar.gz
 ghe-collect-*.tar.gz.sha256
 *.ndjson
 *.partial
+zizmor*.json
+waivers*.json
 
 # Local files
 .env
 .DS_Store
+
+# Python
+__pycache__/
