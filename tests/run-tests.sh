@@ -56,7 +56,8 @@ check "204 recorded"                       grep -q 204 "$O/orgs/test-org/repos/a
 check "archived repo: no rulesets"         test ! -e "$O/orgs/test-org/repos/old/rulesets.json"
 check "audit log as NDJSON"                test "$(wc -l < "$O/enterprise/audit-log-web.ndjson" | tr -d ' ')" = 2
 check "GraphQL error logged as GQLERR"     grep -q '^GQLERR' "$O/errors.log"
-check "403 shows in summary"               grep -q '403  /enterprises/test/actions/permissions' "$O/summary.txt"
+check "admin:enterprise calls skipped"     bash -c "grep -q 'SKIP	enterprise	/enterprises/test/actions/permissions	' '$O/index.tsv' && ! grep -q 'enterprises/test/actions/permissions\"' '$FAKE_GH_LOG'"
+check "skipped calls not listed as failures" bash -c "! grep -q '/enterprises/test/actions' '$O/summary.txt'"
 check "manifest has version and scopes"    bash -c "jq -e '.script_version and (.token_scopes|length>0) and .finished' '$O/meta/run.json'"
 check "unnecessary scope warned"           grep -q "Unnecessary scope 'workflow'" "$WORK/last.log"
 
@@ -69,8 +70,25 @@ check "resume retries only failed calls"   test $((after - before)) -lt 15
 echo "Options"
 run --out "$WORK/out2" --orgs test-org --repo-limit 1 --no-audit-log --no-archive
 check "--orgs and --repo-limit"            bash -c "grep -q 'Reached --repo-limit 1' '$WORK/last.log' && test ! -e '$WORK/out2/enterprise/audit-log-web.ndjson'"
+FAKE_GH_SCOPES="repo, read:org, read:enterprise, read:audit_log, read:repo_hook, admin:enterprise" \
+  run --out "$WORK/out4" --orgs test-org --repo-limit 1 --no-audit-log --no-archive
+check "admin:enterprise calls made when granted" grep -q '403  /enterprises/test/actions/permissions' "$WORK/out4/summary.txt"
+FAKE_GH_CLASSIC_BLOCK=1 run --out "$WORK/out5" --no-audit-log --no-archive
+check "classic PAT block explained"        bash -c "grep -q 'Org test-org blocks classic PATs' '$WORK/last.log' && grep -A1 'ACTION NEEDED' '$WORK/out5/summary.txt' | grep -q test-org"
+FAKE_GH_CLASSIC_BLOCK=1 run --out "$WORK/out6" --orgs test-org --no-audit-log --no-archive
+check "blocked org skipped with fix"       bash -c "grep -q 'blocks classic PATs. Skipping. Ask an org owner' '$WORK/last.log' && test \$(grep -c 'blocks classic PATs. Adding scopes' '$WORK/last.log') = 1"
 FAKE_GH_NO_ORGS=1 run --out "$WORK/out3" --no-audit-log --no-archive
 check "no organizations does not crash"    bash -c "grep -q 'No organizations found' '$WORK/last.log' && test -s '$WORK/out3/summary.txt'"
+
+echo "OAuth token"
+GH_TOKEN="gho_testtoken" FAKE_GH_SCOPES="repo, read:org, gist, read:enterprise, read:audit_log, read:repo_hook" \
+  run --out "$WORK/out7" --orgs test-org --repo-limit 1 --no-audit-log --no-archive
+check "OAuth token accepted without warning" bash -c "! grep -q 'does not look like' '$WORK/last.log'"
+check "gist scope allowed for OAuth"       bash -c "! grep -q \"Unnecessary scope 'gist'\" '$WORK/last.log'"
+check "OAuth revoke reminder"              grep -q "gh auth logout --hostname test.ghe.com" "$WORK/last.log"
+check "manifest records token type"        bash -c "jq -e '.token_type==\"oauth\"' '$WORK/out7/meta/run.json'"
+check "OAuth token never written to output" bash -c "! grep -rq gho_testtoken '$WORK/out7'"
+check "gist still warned for classic PAT"  bash -c "FAKE_GH_SCOPES='repo, gist' GH_TOKEN=ghp_testtoken '$TEST_BASH' '$SCRIPT' --host test.ghe.com --enterprise test --orgs test-org --repo-limit 1 --no-audit-log --no-archive --out '$WORK/out8' 2>&1 | grep -q \"Unnecessary scope 'gist'\""
 
 echo "Validation"
 "$TEST_BASH" "$SCRIPT" --host github.com --enterprise test >"$WORK/v.log" 2>&1

@@ -64,7 +64,8 @@ Options:
   -h, --help               Show this help
 
 The token is read from GH_TOKEN. If it is not set, the script prompts without echoing input.
-Use a short-lived classic PAT. See README.md for required scopes.
+Use a short-lived classic PAT, or an OAuth token from 'gh auth login' if the organization
+blocks classic PATs. See README.md for required scopes.
 EOF
 }
 
@@ -127,13 +128,15 @@ if command -v sha256sum >/dev/null 2>&1; then SHA_CMD=(sha256sum); else SHA_CMD=
 # ---------------------------------------------------------------------------
 if [[ -z "${GH_TOKEN:-}" ]]; then
   [[ -t 0 ]] || die "GH_TOKEN is not set and there is no terminal to prompt in"
-  read -rsp "Classic PAT for ${HOST} (input hidden): " GH_TOKEN; echo >&2
+  read -rsp "Classic PAT or OAuth token for ${HOST} (input hidden): " GH_TOKEN; echo >&2
 fi
 [[ -n "${GH_TOKEN:-}" ]] || die "Empty token"
+TOKEN_TYPE="unknown"
 case "$GH_TOKEN" in
-  ghp_*)        ;;
-  github_pat_*) die "Fine-grained PATs cannot read enterprise endpoints. Use a classic PAT" ;;
-  *)            warn "Token does not look like a classic PAT (ghp_...). Continuing anyway" ;;
+  ghp_*)        TOKEN_TYPE="classic-pat" ;;
+  gho_*)        TOKEN_TYPE="oauth" ;;
+  github_pat_*) die "Fine-grained PATs cannot read enterprise endpoints. Use a classic PAT, or an OAuth token from 'gh auth login'" ;;
+  *)            warn "Token does not look like a classic PAT (ghp_...) or OAuth token (gho_...). Continuing anyway" ;;
 esac
 export GH_TOKEN
 export GH_ENTERPRISE_TOKEN="$GH_TOKEN"
@@ -163,6 +166,7 @@ trap 'warn "Interrupted. Resume with: $0 --host $HOST --enterprise $ENTERPRISE -
 CALLS=0
 LAST_STATUS=""
 IP_WARNED=0
+PAT_BLOCKED=" "   # orgs that block classic PATs, space-separated
 LOGIN=""
 SCOPES=""
 TOKEN_EXPIRY=""
@@ -199,6 +203,24 @@ handle_error() { # errfile endpoint
     IP_WARNED=1
     warn "Blocked by IP allow list / Conditional Access. Run from the customer's network"
   fi
+  note_pat_block "$1"
+}
+
+# An org can block classic PATs on its own. gh then suggests 'admin:org', which does not help.
+note_pat_block() { # file with error text
+  local o
+  while IFS= read -r o; do
+    [[ -n "$o" && "$PAT_BLOCKED" != *" $o "* ]] || continue
+    PAT_BLOCKED="${PAT_BLOCKED}${o} "
+    warn "Org ${o} blocks classic PATs. Adding scopes does not help (ignore gh's 'admin:org' hint)"
+  done < <(grep -oE '`[^`]+` forbids access via a personal access token \(classic\)' "$1" 2>/dev/null | cut -d'`' -f2)
+}
+
+pat_blocked() { [[ "$PAT_BLOCKED" == *" $1 "* ]]; }
+
+# skip <category> <endpoint>  (recorded in index.tsv as SKIP, no API call)
+skip() {
+  record "SKIP" "$1" "$2" ""
 }
 
 # api_get <category> <endpoint> <outfile> [paginate 0|1] [jq post-filter]
@@ -280,6 +302,7 @@ gql() {
     if jq -e 'if type=="array" then any(.[]; has("errors")) else has("errors") end' "$out" >/dev/null 2>&1; then
       LAST_STATUS="GQLERR"
       printf '%s\t%s\t%s\n' "GQLERR" "graphql:${name}" "$(jq -c '[.. | objects | select(has("errors")) | .errors[]?.message]' "$out" | head -c 400)" >> "$ERRLOG"
+      note_pat_block "$out"
     fi
   elif grep -qE 'HTTP [0-9]{3}' "$err"; then
     handle_error "$err" "graphql:${name}"
@@ -287,6 +310,7 @@ gql() {
   else
     LAST_STATUS="GQLERR"
     printf '%s\t%s\t%s\n' "GQLERR" "graphql:${name}" "$(head -c 400 "$err" | tr '\n\r' '  ')" >> "$ERRLOG"
+    note_pat_block "$err"
     rm -f "$out"
   fi
   record "$LAST_STATUS" "$cat" "graphql:${name}" "$out"
@@ -316,7 +340,13 @@ whoami_and_scopes() {
   api_get meta "/user" "$OUT/meta/user.json" || die "Could not fetch /user"
   LOGIN="$(jq -r '.login // empty' "$OUT/meta/user.json")"
   log "Authenticated as ${LOGIN} on ${HOST}"
-  if [[ -n "$TOKEN_EXPIRY" ]]; then log "Token expires: ${TOKEN_EXPIRY}"; else warn "Token has no expiry date. Use a short lifetime"; fi
+  if [[ -n "$TOKEN_EXPIRY" ]]; then
+    log "Token expires: ${TOKEN_EXPIRY}"
+  elif [[ "$TOKEN_TYPE" == oauth ]]; then
+    log "OAuth token (gh auth login). It does not expire; revoke it after the run"
+  else
+    warn "Token has no expiry date. Use a short lifetime"
+  fi
 }
 
 has_scope() { # scope -> 0 if covered (directly or by a parent scope)
@@ -341,10 +371,12 @@ check_scopes() {
   done
   has_scope admin:org || log "Optional scope 'admin:org' missing. Org Actions settings, runner groups, secret names and code security are skipped"
   has_scope admin:org_hook || log "Optional scope 'admin:org_hook' missing. Org webhooks are skipped"
+  has_scope admin:enterprise || log "Scope 'admin:enterprise' not granted (as intended). Enterprise Actions policies and runners, audit log streams, IP allow list, IdP and domains are skipped. Take screenshots in the UI instead"
   local IFS=','
   for s in $SCOPES; do
     case "$s" in
       repo|read:org|read:enterprise|read:audit_log|read:repo_hook|admin:org|admin:org_hook) ;;
+      gist) [[ "$TOKEN_TYPE" == oauth ]] || warn "Unnecessary scope '${s}'. Consider a new token without it" ;;  # gh auth login always requests it
       *) warn "Unnecessary scope '${s}'. Consider a new token without it" ;;
     esac
   done
@@ -355,11 +387,11 @@ write_manifest() { # start|end
   script_sha="$("${SHA_CMD[@]}" "$0" 2>/dev/null | cut -d' ' -f1)"
   if [[ "$1" == "start" ]]; then
     jq -n --arg v "$SCRIPT_VERSION" --arg sha "$script_sha" --arg host "$HOST" --arg ent "$ENTERPRISE" \
-      --arg login "$LOGIN" --arg scopes "$SCOPES" --arg exp "$TOKEN_EXPIRY" --arg started "$STARTED" \
+      --arg login "$LOGIN" --arg scopes "$SCOPES" --arg exp "$TOKEN_EXPIRY" --arg ttype "$TOKEN_TYPE" --arg started "$STARTED" \
       --arg gh "$GH_VER" --arg orgs "$ORGS_ARG" --argjson audit_days "$AUDIT_DAYS" \
       --argjson resume "$RESUME" --argjson alerts "$COLLECT_ALERTS" --argjson keep_vars "$KEEP_VAR_VALUES" \
       '{script_version:$v, script_sha256:$sha, host:$host, enterprise:$ent, user:$login,
-        token_scopes:($scopes|split(",")), token_expiry:$exp, gh_version:$gh,
+        token_scopes:($scopes|split(",")), token_type:$ttype, token_expiry:$exp, gh_version:$gh,
         params:{orgs:$orgs, audit_days:$audit_days, resume:($resume==1), alerts:($alerts==1), keep_variable_values:($keep_vars==1)},
         started:$started, finished:null, api_calls:null}' > "$f"
   else
@@ -385,27 +417,41 @@ collect_enterprise() {
     'query($slug:String!){ enterprise(slug:$slug){ ownerInfo{ defaultRepositoryPermissionSetting membersCanCreateRepositoriesSetting membersCanChangeRepositoryVisibilitySetting membersCanDeleteRepositoriesSetting membersCanInviteCollaboratorsSetting allowPrivateRepositoryForkingSetting membersCanUpdateProtectedBranchesSetting twoFactorRequiredSetting } } }'
   gql enterprise:optional policies-extra "$E/graphql-policies-extra.json" \
     'query($slug:String!){ enterprise(slug:$slug){ ownerInfo{ membersCanDeleteIssuesSetting membersCanMakePurchasesSetting membersCanViewDependencyInsightsSetting organizationProjectsSetting repositoryProjectsSetting teamDiscussionsSetting notificationDeliveryRestrictionEnabledSetting } } }'
-  gql enterprise ip-allow-list "$E/graphql-ip-allow-list.json" \
-    'query($slug:String!,$endCursor:String){ enterprise(slug:$slug){ ownerInfo{ ipAllowListEnabledSetting ipAllowListForInstalledAppsEnabledSetting ipAllowListEntries(first:100, after:$endCursor){ pageInfo{ hasNextPage endCursor } nodes{ allowListValue name isActive createdAt updatedAt } } } } }' 1
-  gql enterprise identity-provider "$E/graphql-identity-provider.json" \
-    'query($slug:String!){ enterprise(slug:$slug){ ownerInfo{ oidcProvider{ id providerType tenantId } samlIdentityProvider{ id issuer ssoUrl } } } }'
+  if (( ENT_ADMIN )); then
+    gql enterprise ip-allow-list "$E/graphql-ip-allow-list.json" \
+      'query($slug:String!,$endCursor:String){ enterprise(slug:$slug){ ownerInfo{ ipAllowListEnabledSetting ipAllowListForInstalledAppsEnabledSetting ipAllowListEntries(first:100, after:$endCursor){ pageInfo{ hasNextPage endCursor } nodes{ allowListValue name isActive createdAt updatedAt } } } } }' 1
+    gql enterprise identity-provider "$E/graphql-identity-provider.json" \
+      'query($slug:String!){ enterprise(slug:$slug){ ownerInfo{ oidcProvider{ id providerType tenantId } samlIdentityProvider{ id issuer ssoUrl } } } }'
+  else
+    skip enterprise graphql:ip-allow-list
+    skip enterprise graphql:identity-provider
+  fi
   gql enterprise:optional counts "$E/graphql-counts.json" \
     'query($slug:String!){ enterprise(slug:$slug){ ownerInfo{ outsideCollaborators(first:1){ totalCount } pendingAdminInvitations(first:1){ totalCount } pendingMemberInvitations(first:1){ totalCount } } } }'
-  gql enterprise:optional domains "$E/graphql-domains.json" \
-    'query($slug:String!){ enterprise(slug:$slug){ ownerInfo{ domains(first:100){ nodes{ domain isVerified isApproved } } } } }'
-
   local b="/enterprises/${ent}"
-  api_get enterprise          "$b/actions/permissions"                          "$E/actions-permissions.json"
-  api_get enterprise:optional "$b/actions/permissions/selected-actions"         "$E/actions-selected-actions.json"
-  api_get enterprise          "$b/actions/permissions/workflow"                 "$E/actions-workflow-permissions.json"
-  api_get enterprise:optional "$b/actions/permissions/fork-pr-contributor-approval" "$E/actions-fork-pr-approval.json"
-  api_get enterprise:optional "$b/actions/permissions/self-hosted-runners"      "$E/actions-self-hosted-runners-policy.json"
-  api_get enterprise          "$b/actions/runner-groups?per_page=100"           "$E/actions-runner-groups.json" 1
-  api_get enterprise          "$b/actions/runners?per_page=100"                 "$E/actions-runners.json" 1
+  if (( ENT_ADMIN )); then
+    gql enterprise:optional domains "$E/graphql-domains.json" \
+      'query($slug:String!){ enterprise(slug:$slug){ ownerInfo{ domains(first:100){ nodes{ domain isVerified isApproved } } } } }'
+    api_get enterprise          "$b/actions/permissions"                          "$E/actions-permissions.json"
+    api_get enterprise:optional "$b/actions/permissions/selected-actions"         "$E/actions-selected-actions.json"
+    api_get enterprise          "$b/actions/permissions/workflow"                 "$E/actions-workflow-permissions.json"
+    api_get enterprise:optional "$b/actions/permissions/fork-pr-contributor-approval" "$E/actions-fork-pr-approval.json"
+    api_get enterprise:optional "$b/actions/permissions/self-hosted-runners"      "$E/actions-self-hosted-runners-policy.json"
+    api_get enterprise          "$b/actions/runner-groups?per_page=100"           "$E/actions-runner-groups.json" 1
+    api_get enterprise          "$b/actions/runners?per_page=100"                 "$E/actions-runners.json" 1
+    api_get enterprise:optional "$b/audit-log/streams"                            "$E/audit-log-streams.json"
+  else
+    local ep
+    for ep in graphql:domains "$b/actions/permissions" "$b/actions/permissions/selected-actions" \
+              "$b/actions/permissions/workflow" "$b/actions/permissions/fork-pr-contributor-approval" \
+              "$b/actions/permissions/self-hosted-runners" "$b/actions/runner-groups" "$b/actions/runners" \
+              "$b/audit-log/streams"; do
+      skip enterprise "$ep"
+    done
+  fi
   api_get enterprise          "$b/code-security/configurations?per_page=100"    "$E/code-security-configurations.json" 1
   api_get enterprise:optional "$b/code-security/configurations/defaults"         "$E/code-security-defaults.json"
   api_get enterprise:optional "$b/properties/schema"                            "$E/custom-properties-schema.json"
-  api_get enterprise:optional "$b/audit-log/streams"                            "$E/audit-log-streams.json"
   api_get enterprise:optional "$b/consumed-licenses?per_page=100"               "$E/consumed-licenses.json" 1
   api_get enterprise:optional "$b/copilot/billing/seats?per_page=100"           "$E/copilot-seats.json" 1
   api_get enterprise:optional "$b/teams?per_page=100"                           "$E/enterprise-teams.json" 1
@@ -458,7 +504,11 @@ collect_org() {
   log "Org: ${org}"
 
   if ! api_get org "$b" "$O/org.json"; then
-    warn "Could not fetch org ${org} (${LAST_STATUS}). Skipping"
+    if pat_blocked "$org"; then
+      warn "Org ${org} blocks classic PATs. Skipping. Ask an org owner to allow them for a limited time (Org -> Settings -> Personal access tokens; if locked, Enterprise -> Policies -> Personal access tokens), then rerun with: --out \"$OUT\" --resume"
+    else
+      warn "Could not fetch org ${org} (${LAST_STATUS}). Skipping"
+    fi
     return 0
   fi
   if [[ "$(jq -r 'has("default_repository_permission")' "$O/org.json")" != "true" ]]; then
@@ -649,7 +699,7 @@ write_summary() {
     awk -F'\t' 'NR>1 {c[$2]++} END {for (k in c) printf "  %-8s %d\n", k, c[k]}' "$INDEX" | sort
     echo
     echo "Failures on non-optional calls (grouped by endpoint):"
-    awk -F'\t' 'NR>1 && $2 !~ /^(2|cached)/ && $3 !~ /:optional$/ {
+    awk -F'\t' 'NR>1 && $2 !~ /^(2|cached|SKIP)/ && $3 !~ /:optional$/ {
         ep=$4; sub(/\?.*/, "", ep)
         gsub(/\/contents\/.*/, "/contents/{path}", ep)
         gsub(/\/repos\/[^\/]+\/[^\/]+/, "/repos/{owner}/{repo}", ep)
@@ -669,6 +719,16 @@ write_summary() {
       printf '  %-30s repos: %-6s owner-view: %s\n' "$org" "$repos" "$owner"
     done
     echo
+    if [[ -n "${PAT_BLOCKED// /}" ]]; then
+      echo "ACTION NEEDED: these organizations block classic PATs and were not collected:"
+      for org in $PAT_BLOCKED; do echo "  ${org}"; done
+      echo "An org owner must allow classic PATs for a limited time (Org -> Settings -> Personal access tokens;"
+      echo "if locked, Enterprise -> Policies -> Personal access tokens). Then rerun with:"
+      echo "  $0 --host $HOST --enterprise $ENTERPRISE --out \"$OUT\" --resume"
+      echo "Alternative: rerun with an OAuth token from 'gh auth login' (see README.md, Token)."
+      echo
+    fi
+    (( ENT_ADMIN )) || { echo "SKIP: calls that need 'admin:enterprise' (not requested by design). Take screenshots in the UI."; echo; }
     echo "403/404 on individual calls is often expected (feature not in use, missing scope or role)."
     echo "See errors.log for details and index.tsv for every call."
   } > "$S"
@@ -693,6 +753,9 @@ log "Output: ${OUT}"
 
 whoami_and_scopes
 check_scopes
+# Without a scope header we cannot tell, so try the calls anyway
+ENT_ADMIN=1
+[[ -n "$SCOPES" ]] && ! has_scope admin:enterprise && ENT_ADMIN=0
 write_manifest start
 
 collect_enterprise
@@ -716,4 +779,9 @@ done
 write_manifest end
 write_summary
 package
-log "Remember: revoke the token now, and store the output only in the engagement folder"
+if [[ "$TOKEN_TYPE" == oauth ]]; then
+  log "Remember: run 'gh auth logout --hostname ${HOST}' and revoke GitHub CLI at https://${HOST}/settings/applications now"
+  log "Store the output only in the engagement folder"
+else
+  log "Remember: revoke the token now, and store the output only in the engagement folder"
+fi
