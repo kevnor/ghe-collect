@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            test_bash: bash
+          - os: macos-latest
+            test_bash: /bin/bash # bash 3.2, the macOS default
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Shellcheck
+        if: runner.os == 'Linux'
+        run: shellcheck -e SC2016 ghe-collect.sh scripts/*.sh tests/*.sh
+
+      - name: Tests
+        env:
+          TEST_BASH: ${{ matrix.test_bash }}
+        run: bash tests/run-tests.sh

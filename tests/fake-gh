@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""
+Fake `gh` CLI for testing ghe-collect.sh without a real GHE.com instance.
+
+Logs every invocation (as JSON) to $FAKE_GH_LOG and returns canned responses that
+exercise pagination shapes, 204/403/404 handling, GraphQL errors and file downloads.
+
+Set FAKE_GH_NO_ORGS=1 to simulate an enterprise where no organizations are visible.
+"""
+import json
+import os
+import sys
+
+args = sys.argv[1:]
+log_path = os.environ.get("FAKE_GH_LOG")
+if log_path:
+    with open(log_path, "a") as fh:
+        fh.write(json.dumps(args) + "\n")
+
+if args[:1] == ["--version"]:
+    print("gh version 2.60.0 (2024-10-01)")
+    sys.exit(0)
+
+
+def fail(code, msg):
+    sys.stderr.write(f"gh: {msg} (HTTP {code})\n")
+    sys.exit(1)
+
+
+slurp = "--slurp" in args
+jq_expr = args[args.index("--jq") + 1] if "--jq" in args else None
+
+
+def out(obj):
+    print(json.dumps([obj] if slurp else obj))
+    sys.exit(0)
+
+
+# GraphQL
+if len(args) > 1 and args[1] == "graphql":
+    query = next(a for a in args if a.startswith("query="))
+    if "membersCanDeleteIssuesSetting" in query:
+        sys.stderr.write("gh: Field 'x' doesn't exist on type 'EnterpriseOwnerInfo'\n")
+        sys.exit(1)
+    if "organizations(" in query:
+        nodes = [] if os.environ.get("FAKE_GH_NO_ORGS") else [{"login": "test-org"}]
+        out({"data": {"enterprise": {"organizations": {"nodes": nodes}}}})
+    out({"data": {"enterprise": {}}})
+
+# REST: endpoint is the last positional argument
+skip_with_value = {"--hostname", "--method", "-H", "--jq"}
+positional, i = [], 1
+while i < len(args):
+    if args[i] in skip_with_value:
+        i += 2
+        continue
+    if args[i].startswith("-"):
+        i += 1
+        continue
+    positional.append(args[i])
+    i += 1
+ep = positional[-1]
+path = ep.split("?")[0]
+
+if ep == "rate_limit":
+    print("4999 9999999999")
+    sys.exit(0)
+
+if "-i" in args and ep == "/user":
+    print("HTTP/2.0 200 OK")
+    print("X-Oauth-Scopes: repo, read:org, read:enterprise, read:audit_log, read:repo_hook, workflow")
+    print("Github-Authentication-Token-Expiration: 2099-01-01 10:00:00 UTC")
+    print()
+    print("{}")
+    sys.exit(0)
+
+if path == "/user":
+    out({"login": "test_user"})
+if "/audit-log" in path and jq_expr:
+    print('{"action":"org.update_member"}\n{"action":"repo.create"}')
+    sys.exit(0)
+if path.startswith("/enterprises") and path.endswith("/actions/permissions"):
+    fail(403, "Resource not accessible by personal access token")
+
+O, R = "/orgs/test-org", "/repos/test-org/app1"
+routes = {
+    O: {"login": "test-org", "default_repository_permission": "none"},
+    O + "/repos": [
+        {"name": "app1", "archived": False, "default_branch": "main"},
+        {"name": "old", "archived": True, "default_branch": "master"},
+    ],
+    O + "/teams": [{"slug": "team-a"}],
+    O + "/organization-roles": {"total_count": 1, "roles": [{"id": 7}]},
+    O + "/rulesets": [{"id": 10}],
+    O + "/secret-scanning/alerts": [{"number": 1, "secret": "AKIAFAKEFAKEFAKE", "secret_type": "aws"}],
+    R + "/rulesets": [
+        {"id": 10, "source_type": "Organization"},
+        {"id": 20, "source_type": "Enterprise"},
+        {"id": 30, "source_type": "Repository"},
+    ],
+    R + "/environments": {"total_count": 1, "environments": [{"name": "prod env/1"}]},
+    R + "/contents/.github/workflows": [{"name": "ci.yml", "type": "file"}, {"name": "README.md", "type": "file"}],
+    R + "/automated-security-fixes": {"enabled": True},
+}
+if path in routes:
+    out(routes[path])
+if path.endswith("/actions/runner-groups"):
+    out({"total_count": 1, "runner_groups": [{"id": 2, "visibility": "selected"}]})
+if path.endswith("/actions/variables") or path.endswith("/variables"):
+    out({"total_count": 1, "variables": [{"name": "FOO", "value": "supersecret"}]})
+if path == R + "/contents/.github/workflows/ci.yml":
+    print("on: push\njobs: {}")
+    sys.exit(0)
+if path == R + "/contents/CODEOWNERS":
+    print("* @test-org/team-a")
+    sys.exit(0)
+if path.endswith("/code-security-configuration"):
+    sys.exit(0)  # 204 No Content
+if path.endswith("/vulnerability-alerts") or "/contents/" in path or path.endswith("/protection"):
+    fail(404, "Not Found")
+
+out([] if slurp else {})

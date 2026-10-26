@@ -1,0 +1,10 @@
+# Collected output must never be committed
+ghe-collect-*/
+ghe-collect-*.tar.gz
+ghe-collect-*.tar.gz.sha256
+*.ndjson
+*.partial
+
+# Local files
+.env
+.DS_Store
