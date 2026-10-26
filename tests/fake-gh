@@ -6,6 +6,8 @@ Logs every invocation (as JSON) to $FAKE_GH_LOG and returns canned responses tha
 exercise pagination shapes, 204/403/404 handling, GraphQL errors and file downloads.
 
 Set FAKE_GH_NO_ORGS=1 to simulate an enterprise where no organizations are visible.
+Set FAKE_GH_SCOPES to override the token scopes in the X-OAuth-Scopes header.
+Set FAKE_GH_CLASSIC_BLOCK=1 to simulate test-org blocking classic PATs.
 """
 import json
 import os
@@ -28,6 +30,8 @@ def fail(code, msg):
 
 
 slurp = "--slurp" in args
+classic_block = os.environ.get("FAKE_GH_CLASSIC_BLOCK")
+BLOCK_MSG = "`test-org` forbids access via a personal access token (classic). Please use a GitHub App, OAuth App, or a personal access token with fine-grained permissions."
 jq_expr = args[args.index("--jq") + 1] if "--jq" in args else None
 
 
@@ -41,6 +45,9 @@ if len(args) > 1 and args[1] == "graphql":
     query = next(a for a in args if a.startswith("query="))
     if "membersCanDeleteIssuesSetting" in query:
         sys.stderr.write("gh: Field 'x' doesn't exist on type 'EnterpriseOwnerInfo'\n")
+        sys.exit(1)
+    if "organizations(" in query and classic_block:
+        sys.stderr.write(f"gh: {BLOCK_MSG}\n")
         sys.exit(1)
     if "organizations(" in query:
         nodes = [] if os.environ.get("FAKE_GH_NO_ORGS") else [{"login": "test-org"}]
@@ -68,7 +75,8 @@ if ep == "rate_limit":
 
 if "-i" in args and ep == "/user":
     print("HTTP/2.0 200 OK")
-    print("X-Oauth-Scopes: repo, read:org, read:enterprise, read:audit_log, read:repo_hook, workflow")
+    scopes = os.environ.get("FAKE_GH_SCOPES", "repo, read:org, read:enterprise, read:audit_log, read:repo_hook, workflow")
+    print(f"X-Oauth-Scopes: {scopes}")
     print("Github-Authentication-Token-Expiration: 2099-01-01 10:00:00 UTC")
     print()
     print("{}")
@@ -79,6 +87,8 @@ if path == "/user":
 if "/audit-log" in path and jq_expr:
     print('{"action":"org.update_member"}\n{"action":"repo.create"}')
     sys.exit(0)
+if classic_block and path.startswith("/orgs/test-org"):
+    fail(403, BLOCK_MSG)
 if path.startswith("/enterprises") and path.endswith("/actions/permissions"):
     fail(403, "Resource not accessible by personal access token")
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Detects organizations that block classic PATs, explains the fix and lists them under `ACTION NEEDED` in `summary.txt` (gh's `admin:org` hint is misleading here)
+- Accepts OAuth tokens from `gh auth login` (`gho_...`) as an alternative when organizations block classic PATs: no format warning, `gist` scope allowed, revoke reminder at the end, `token_type` in `meta/run.json`
+- Skips calls that need `admin:enterprise` when the token lacks it, and records them as `SKIP` instead of reporting them as failures
+
 ## 1.1.0 (2026-10-26)
 
 - English output, comments and documentation

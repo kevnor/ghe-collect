@@ -7,9 +7,9 @@ One run exports enterprise, organization and repository settings, the audit log 
 ## Safety properties
 
 - **Read-only.** Every REST call is `GET`. GraphQL is query-only, and the script refuses to send anything containing `mutation`.
-- **The token is never written to disk.** It is read from `GH_TOKEN` or a hidden prompt.
+- **The token is never written to disk.** It is read from `GH_TOKEN` or a hidden prompt. (With an OAuth token, `gh auth login` stores it in the keychain or gh's config. See [OAuth token](#oauth-token-when-classic-pats-are-blocked).)
 - **No secret values.** The API never returns secret values, only names. Actions variable values are redacted by default (name and length are kept). Secret scanning alerts are fetched with `hide_secret=true`, and any `secret` field is removed as well.
-- **Traceable.** `meta/run.json` records the user, token scopes, token expiry, start and finish time, number of API calls and the SHA-256 of the script.
+- **Traceable.** `meta/run.json` records the user, token type, token scopes, token expiry, start and finish time, number of API calls and the SHA-256 of the script.
 - **Tested.** `tests/run-tests.sh` checks these guarantees against a fake API on every change, on Linux (bash 5) and macOS (bash 3.2).
 
 ## What it collects
@@ -74,9 +74,23 @@ https://SUBDOMAIN.ghe.com/settings/tokens/new?description=ghe-collect&scopes=rep
 
 `repo`, `admin:org` and `admin:org_hook` also grant write access. The script only reads, but the customer must accept the scopes. The script warns about any scope beyond this list.
 
-The enterprise Actions policy endpoint requires `admin:enterprise`. Do not request that scope; take a screenshot in the UI instead.
+Enterprise Actions policies and runners, audit log streams, the IP allow list, the identity provider and verified domains require `admin:enterprise`. Do not request that scope; take screenshots in the UI instead. Without it the script skips those calls and records them as `SKIP` in `index.tsv`.
 
-If the enterprise blocks classic PATs (Enterprise → Policies → Personal access tokens), ask the customer for a time-limited exception rather than changing it yourself.
+Classic PATs can be blocked by the enterprise (Enterprise → Policies → Personal access tokens) **or by each organization** (Org → Settings → Personal access tokens). A blocked organization returns 403 with "forbids access via a personal access token (classic)", and gh suggests the `admin:org` scope, which does not help. The script reports blocked organizations under `ACTION NEEDED` in `summary.txt`. Ask the customer for a time-limited exception rather than changing it yourself, then rerun with `--resume`. Check this before the run if you can, or use an OAuth token instead (below).
+
+### OAuth token (when classic PATs are blocked)
+
+The classic-PAT block does not apply to OAuth apps, and `gh auth login` gets an OAuth token (`gho_...`) with the same scopes, so every call works as with a classic PAT:
+
+```bash
+gh auth login --hostname SUBDOMAIN.ghe.com --web --scopes read:enterprise,read:audit_log,read:repo_hook
+GH_TOKEN="$(gh auth token --hostname SUBDOMAIN.ghe.com)" bash ghe-collect.sh --host SUBDOMAIN.ghe.com --enterprise SLUG
+```
+
+- gh always requests `repo`, `read:org` and `gist`. The script accepts `gist` for OAuth tokens.
+- OAuth tokens do not expire, and gh stores the token on the device (keychain or `hosts.yml`). Log out and revoke it right after the run:
+  `gh auth logout --hostname SUBDOMAIN.ghe.com`, then revoke **GitHub CLI** under `https://SUBDOMAIN.ghe.com/settings/applications`.
+- If an organization restricts OAuth app access, an org owner must approve GitHub CLI once. With SAML SSO, authorize the organizations during the browser flow.
 
 ## Usage
 
@@ -116,7 +130,7 @@ Read `summary.txt` first. `owner-view: no` for an organization means the token u
 
 ## After the run
 
-- [ ] Revoke the PAT
+- [ ] Revoke the PAT, or for an OAuth token: `gh auth logout` and revoke GitHub CLI under Settings → Applications
 - [ ] Move the `.tar.gz` and `.sha256` to the engagement storage, and delete the copy on the device
 - [ ] Record the run in the activity log (from `meta/run.json`)
 - [ ] Run zizmor offline on the workflows: `zizmor --offline workflows/`
